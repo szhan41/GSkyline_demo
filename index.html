@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Hotel Demo</title>
+        <meta charset="utf-8">
+        <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrvczSP1xndcZhCGC27yJqXVd690DzCiY&callback=initMap&libraries=places"></script>
+        <script src="js/combinatorics.js"></script>
+        
+        <style>
+            /* Always set the map height explicitly to define the size of the div element that contains the map. */
+            #googleMap {
+                width: 100%;
+                height: 100%;
+            }
+            /* Optional: Makes the sample page fill the window. */
+            html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            .controls {
+                margin-top: 10px;
+                border: 1px solid transparent;
+                border-radius: 2px 0 0 2px;
+                box-sizing: border-box;
+                -moz-box-sizing: border-box;
+                height: 32px;
+                outline: none;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            }
+            
+            #city-input {
+                background-color: #fff;
+                font-family: Verdana;
+                font-size: 15px;
+                font-weight: 300;
+                margin-left: 12px;
+                padding: 0 11px 0 13px;
+                text-overflow: ellipsis;
+                width: 300px;
+            }
+
+            #city-input:focus {
+                border-color: #4d90fe;
+            }
+
+            .city-container {
+                font-family: Verdana;
+            }
+
+            #size-selector {
+                color: #fff;
+                background-color: #4d90fe;
+                padding: 5px 11px 0px 11px;
+            }
+
+            #size-selector label {
+                font-family: Verdana;
+                font-size: 13px;
+                font-weight: 300;
+            }
+            
+            .hotelIcon {
+                width: 24px;
+                height: 24px;
+            }
+            #resultsTable {
+                border-collapse: collapse;
+                width: 240px;
+            }
+            #rating {
+                font-size: 13px;
+                font-family: Verdana;
+            }
+            .iw_table_row {
+                height: 18px;
+            }
+            .iw_attribute_name {
+                font-weight: bold;
+                text-align: right;
+            }
+            .iw_table_icon {
+                text-align: right;
+            }
+
+        </style> 
+	</head>
+
+	<body>
+        <input id="city-input" class="controls" type="text" placeholder="Enter a location & Select a group size">
+        
+        <div id="size-selector" class="controls">
+            <input type="radio" name="size" id="size1" value=1 checked="checked">
+            <label for="size1">1</label>
+            <input type="radio" name="size" id="size2" value=2>
+            <label for="size2">2</label>
+            <input type="radio" name="size" id="size3" value=3>
+            <label for="size3">3</label>
+        </div>
+        
+        <div style="display: none">
+            <div id="info-content">
+            <table>
+                <tr id="iw-url-row" class="iw_table_row">
+                    <td id="iw-icon" class="iw_table_icon"></td>
+                    <td id="iw-url"></td>
+                </tr>
+                <tr id="iw-address-row" class="iw_table_row">
+                    <td class="iw_attribute_name">Address: </td>
+                    <td id="iw-address"></td>
+                </tr>
+                <tr id="iw-phone-row" class="iw_table_row">
+                    <td class="iw_attribute_name">Telephone: </td>
+                    <td id="iw-phone"></td>
+                </tr>
+                <tr id="iw-rating-row" class="iw_table_row">
+                    <td class="iw_attribute_name">Rating: </td>
+                    <td id="iw-rating"></td>
+                </tr>
+                <tr id="iw-website-row" class="iw_table_row">
+                    <td class="iw_attribute_name">Website: </td>
+                    <td id="iw-website"></td>
+                </tr>
+                <tr id="iw-price-row" class="iw_table_row">
+                    <td class="iw_attribute_name">Price: </td>
+                    <td id="iw-price"></td>
+                </tr>
+                <tr id="iw-distance-row" class="iw_table_row">
+                    <td class="iw_attribute_name">Distance: </td>
+                    <td id="iw-distance"></td>
+                </tr>
+                <tr id="iw-star-row" class="iw_table_row">
+                    <td class="iw_attribute_name">Star: </td>
+                    <td id="iw-star"></td>
+                </tr>
+            </table>
+            </div>
+        </div>
+        
+        <div id="googleMap"></div>
+	</body>
+</html>
+
+<script>
+    var emory = {lat: 33.792429, lng: -84.323879};
+    var city;
+    var cityMarker;
+    
+    var map;
+    var infoWindow;
+    var service;
+    
+    var groupSize = 1;
+    var hotels = [];
+    var markerMap = new Map();
+    
+    var circleList = [];
+    var pathList = [];
+    var hostnameRegexp = new RegExp('^https?://.+?/');
+    
+    
+    var p_idx = 0;
+    
+//    var colors8 = ['Black', 'Yellow', 'Olive', 'Red', 'Blue', 'Green', 'Orange', 'Purple'];
+//    var colors6 = ['Black', 'Yellow', 'Olive', 'Green', 'Orange', 'Purple'];
+//    var test = [{name: "P1", dist: 4, price: 400},
+//        {name: "P2", dist: 24, price: 380},
+//        {name: "P3", dist: 14, price: 340},
+//        {name: "P4", dist: 36, price: 300},
+//        {name: "P5", dist: 26, price: 280},
+//        {name: "P6", dist: 8, price: 260},
+//        {name: "P7", dist: 40, price: 200},
+//        {name: "P8", dist: 20, price: 180},
+//        {name: "P9", dist: 34, price: 140},
+//        {name: "P10", dist: 28, price: 120},
+//        {name: "P11", dist: 16, price: 60}];
+//    console.log(GSkyline(test, 2));
+//    console.log("\n");
+//    console.log(GSkylineBySum(test, 2));
+    
+    
+    
+    function initMap() {
+        map = new google.maps.Map(document.getElementById("googleMap"), {
+            center: emory,
+            zoom: 13,
+            mapTypeId: google.maps.MapTypeId.ROADMAP,
+            disableDefaultUI: false
+        });
+        
+        infoWindow = new google.maps.InfoWindow({
+            content: document.getElementById('info-content')
+        });
+        service = new google.maps.places.PlacesService(map);
+        cityMarker = new google.maps.Marker({
+            map: map,
+            anchorPoint: new google.maps.Point(0, -29)
+        });
+        
+        // Add Watermark
+        var logoControlDiv = document.createElement('DIV');
+        var logo = document.createElement('IMG');
+        logo.src = 'image/emory_logo.png';
+        logoControlDiv.appendChild(logo);
+        map.controls[google.maps.ControlPosition.TOP_RIGHT].push(logoControlDiv);
+        
+        // Create the search box and link it to the UI element.
+        var input = document.getElementById('city-input');
+        var searchBox = new google.maps.places.SearchBox(input);
+        map.controls[google.maps.ControlPosition.TOP_LEFT].push(input);
+        
+        var select = document.getElementById('size-selector');
+        map.controls[google.maps.ControlPosition.TOP_LEFT].push(select);
+        
+        // Bias the SearchBox results towards current map's viewport.
+        map.addListener('bounds_changed', function() {
+            searchBox.setBounds(map.getBounds());
+        });
+        
+        searchBox.addListener('places_changed', function() {
+            p_idx = 0;
+            hotels = [];
+            cityMarker.setVisible(false);
+            
+            for (var marker of markerMap.values()){
+                marker.setMap(null);
+            }
+            markerMap.clear();
+            
+            for (var circle of circleList){
+                circle.setMap(null);
+            }
+            circleList = [];
+            
+            for (var path of pathList){
+                path.setMap(null);
+            }
+            pathList = [];
+            
+            var places = searchBox.getPlaces();
+            if (places.length == 0) {
+                return;
+            }
+                        
+            var bounds = new google.maps.LatLngBounds();
+            places.forEach(function(place) {
+                var loc = place.geometry.location;
+                city = {lat: loc.lat().toFixed(6), lng: loc.lng().toFixed(6)};
+                service.nearbySearch({
+                    location: loc,
+                    radius: 2000, //  The maximum allowed value is 50000
+                    types: ['lodging']
+                }, callback); 
+                
+                cityMarker.setIcon(/** @type {google.maps.Icon} */({
+                    url: place.icon,
+                    size: new google.maps.Size(71, 71),
+                    origin: new google.maps.Point(0, 0),
+                    anchor: new google.maps.Point(17, 34),
+                    scaledSize: new google.maps.Size(35, 35)
+                }));
+                cityMarker.setPosition(loc);
+                cityMarker.setVisible(true);
+                
+                if (place.geometry.viewport) {
+                    bounds.union(place.geometry.viewport);
+                } else {
+                    bounds.extend(place.geometry.location);
+                }
+            });
+            map.fitBounds(bounds);         
+        });
+        
+    } // initMap
+    
+    function callback(results, status) {
+        if (status === google.maps.places.PlacesServiceStatus.OK) {
+            for (var i = 0; i < results.length; i++) {
+                createMarker(results[i]);
+            }
+            
+            var sizes = document.getElementsByName('size');
+            for (var s of sizes) {
+                if (s.checked) {
+                    groupSize = s.value;
+                }
+            }
+//            var data = GSkylineBySum(hotels, groupSize);
+            var data = GSkyline(hotels, groupSize);
+            console.log(data);
+            analyze(data);
+        }
+    }
+
+    function createMarker(place) {
+        var loc = place.geometry.location; 
+        var marker = new google.maps.Marker({
+            position: loc,
+            title: place.name,
+            icon:'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+            animation: google.maps.Animation.DROP,
+            map: map
+        });
+        var key = "(" + loc.lat().toFixed(6) + ", " + loc.lng().toFixed(6) + ")";
+        markerMap.set(key, marker);
+        
+        var star = (-1)*randomStar(1, 5);
+        var price = randomPrice(50+(Math.abs(star)-1)*100, Math.abs(star)*100);
+        var lat = loc.lat().toFixed(6);
+        var lng = loc.lng().toFixed(6);
+        var dist = distanceBetween2POIs(city, {lat: lat, lng: lng});
+        var hotel = {
+            lat: lat,
+            lng: lng,
+            name: place.name,
+            address: place.vicinity,
+            star: star,
+            price: price.toFixed(2), // test[p_idx++].price,
+            dist: dist.toFixed(2)
+        };
+        hotels.push(hotel);
+        
+        google.maps.event.addListener(marker, 'click', function() {
+
+            infoWindow.open(map, this);
+            
+            document.getElementById('iw-icon').innerHTML = '<img class="hotelIcon" ' + 'src="' + place.icon + '"/>';
+            document.getElementById('iw-url').innerHTML = '<b><a href="' + place.url + '">' + place.name + '</a></b>';
+            document.getElementById('iw-address').textContent = place.vicinity;
+            
+            document.getElementById('iw-price').textContent = "$" + hotel.price;
+            document.getElementById('iw-distance').textContent = hotel.dist + "km";
+            
+            if (place.formatted_phone_number) {
+                document.getElementById('iw-phone-row').style.display = '';
+                document.getElementById('iw-phone').textContent = place.formatted_phone_number;
+            } else {
+                document.getElementById('iw-phone-row').style.display = 'none';
+            }
+
+            // Assign a five-star rating to the hotel, using a black star ('&#10029;')
+            // to indicate the rating the hotel has earned, and a white star ('&#10025;')
+            // for the rating points not achieved.
+            if (place.rating) {
+                var ratingHtml = '';
+                for (var i = 0; i < 5; i++) {
+                    if (place.rating < (i + 0.5)) {
+                        ratingHtml += '&#10025;';
+                    } else {
+                        ratingHtml += '&#10029;';
+                    }
+                    document.getElementById('iw-rating-row').style.display = '';
+                    document.getElementById('iw-rating').innerHTML = ratingHtml;
+                }
+            } else {
+                document.getElementById('iw-rating-row').style.display = 'none';
+            }
+            
+            
+            var starHtml = '';
+            for (var i = 1; i < 6; i++) {
+                if (Math.abs(hotel.star) < i) {
+                    starHtml += '&#10025;';
+                } else {
+                    starHtml += '&#10029;';
+                }
+                document.getElementById('iw-star-row').style.display = '';
+                document.getElementById('iw-star').innerHTML = starHtml;
+            }
+            
+
+            // The regexp isolates the first part of the URL (domain plus subdomain)
+            // to give a short URL for displaying in the info window.
+            if (place.website) {
+                var fullUrl = place.website;
+                var website = hostnameRegexp.exec(place.website);
+            if (website === null) {
+                website = 'http://' + place.website + '/';
+                fullUrl = website;
+            }
+                document.getElementById('iw-website-row').style.display = '';
+                document.getElementById('iw-website').textContent = website;
+            } else {
+                document.getElementById('iw-website-row').style.display = 'none';
+            }
+        });
+    }
+    
+    function analyze(data) {
+        var plus = 10;
+//        console.log(data);
+        
+        var cidx = 0;
+        data.forEach(function(group){
+            var color; // randomColor();
+            var idx = 0;
+            var line = [];
+//            console.log(group);
+            
+            group.forEach(function(h){
+                if (idx % group.length === 0) {
+                    plus += 10;
+                    color = randomColor(); // colors8[cidx++];
+                }
+
+                var key = "(" + h.lat + ", " + h.lng + ")";
+                var mk = markerMap.get(key);
+//                mk.setAnimation(null);
+//                mk.setAnimation(google.maps.Animation.BOUNCE);
+                mk.setIcon('http://maps.google.com/mapfiles/ms/icons/red-dot.png');
+                var pos = mk.getPosition();
+
+                var circle = new google.maps.Circle({
+                    center: pos,
+                    radius: plus,
+                    strokeColor: color,
+                    strokeOpacity: 0.9,
+                    strokeWeight: 3,
+                    fillColor: color,
+                    fillOpacity: 0.1,
+                    map: map
+                });
+                circleList.push(circle);
+
+                line.push(pos);
+                idx++;
+            }); // group
+             
+            var path = new google.maps.Polyline({
+                path: line,
+                strokeColor: color,
+                strokeOpacity: 1.0,
+                strokeWeight: 2,
+                map: map
+            });
+            
+            pathList.push(path);
+               
+        }); // data
+    } // analyze
+    
+    function randomColor() {
+        var letters = '0123456789ABCDEF';
+        var color = '#';
+        for (var i = 0; i < 6; i++ ) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+    }
+    
+    function randomPrice(min, max) {
+        return Math.random() * (max - min) + min;
+    }
+    
+    function randomStar(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function distanceBetween2POIs(pa, pb) {
+        var R = 6371; // Radius of the earth in km
+        var dLat = (pb.lat-pa.lat) * (Math.PI/180);
+        var dLng = (pb.lng-pa.lng) * (Math.PI/180); 
+        var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos((pa.lat) * (Math.PI/180)) * Math.cos((pb.lat) * (Math.PI/180)) * 
+                Math.sin(dLng/2) * Math.sin(dLng/2);
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+        var d = R * c; // Distance in km
+        return d;
+    }
+    
+       
+    function GSkylineBySum(h, k) {
+        var result = [];
+        var groups = Combinatorics.combination(h, k).toArray();
+        var count = 0;
+        
+        for (var i of groups) {
+            var sum_d = 0;
+            var sum_p = 0;
+            var sum_s = 0;
+            for (var o of i) {
+                sum_d+= +o.dist;
+                sum_p+= +o.price;
+//                sum_s+= Math.abs(o.star);
+            }
+//            var pi = {name: "Pi", dist: sum_d, price: sum_p, star: sum_s}
+            var pi = {name: "Pi", dist: sum_d, price: sum_p}
+            
+            var mark = false;
+            for (var j of groups) {
+                var sum_d = 0;
+                var sum_p = 0;
+                var sum_s = 0;
+                for (var o of j) {
+                    sum_d+= +o.dist;
+                    sum_p+= +o.price;
+//                    sum_s+= Math.abs(o.star);
+                }
+//                var pj = {name: "Pj", dist: sum_d, price: sum_p, star: sum_s}
+                var pj = {name: "Pj", dist: sum_d, price: sum_p}
+                
+                if (!containsAll(i, j)) {
+                    if (isDominate(pj, pi)) {
+                        mark = true;
+                        break;
+                    }
+                } 
+                                
+            } // for j
+            
+            if (!mark) {
+                var an = [];
+                var list = [];
+                for (var o of i) {
+                    list.push(o);
+//                    an.push("["+o.dist +"km; $"+ o.price +"; "+ Math.abs(o.star)+"]");
+                    an.push("["+o.dist +"km; $"+ o.price +"]");
+                }
+                console.log(an);
+                result.push(list);
+                count++;
+            }    
+        } // for i
+        console.log("The number of skyline groups: " + count);
+        return result;
+    }
+       
+    function GSkyline(h, k) {
+        var result = [];
+        var groups = Combinatorics.combination(h, k).toArray();
+        var count = 0;
+        
+        for (var i of groups) {
+            var mark = false;
+            for (var j of groups) {
+                if (!containsAll(i, j)) {
+                    if (isGroupDominate(j, i)) {
+                        mark = true;
+                        break;
+                    }
+                } 
+                                
+            } // for j
+            
+            if (!mark) {
+                var an = [];
+                var list = [];
+                for (var o of i) {
+                    list.push(o);
+//                    an.push("["+o.dist +"km; $"+ o.price +"; "+ Math.abs(o.star)+"]");
+                    an.push("["+o.dist +"km; $"+ o.price +"]");
+                }
+                console.log(an);
+                result.push(list);
+                count++;
+            }    
+        } // for i
+        console.log("The number of skyline groups: " + count);
+        return result;
+    }
+    
+    function containsAll(a, b) {
+        for (var v of b) {
+            if (!a.includes(v)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    function isGroupDominate(a, b) {        
+        var permu = Combinatorics.permutation(b).toArray();
+        for (var p of permu) {
+            var dcount = 0;
+            var ecount = 0;
+            for (var j = 0; j < a.length; j++) {
+                if (isDominate(a[j], p[j])) {
+                    dcount++;
+                }
+                if (isEqual(a[j], p[j])) {
+                    ecount++;
+                }
+            }
+            if (dcount >= 1 && ecount === (a.length - dcount)) {
+                return true;
+            }
+        } // p
+        return false;
+    }   
+    
+    function isEqual(a, b) {
+        var keys = Object.keys(a)
+            .filter(k => k !== 'name').filter(k => k !== 'address')
+            .filter(k => k !== 'lat').filter(k => k !== 'lng').filter(k => k !== 'star');
+        var count = 0;
+        for (var k of keys) {
+            if (a[k] === b[k]) {
+                count++;
+            }
+        }
+        if (count === keys.length) {
+            return true;
+        } else {
+            return false;
+        }       
+    }
+    
+    function isDominate(a, b) {    
+        var keys = Object.keys(a)
+            .filter(k => k !== 'name').filter(k => k !== 'address')
+            .filter(k => k !== 'lat').filter(k => k !== 'lng').filter(k => k !== 'star');
+        var count = 0;
+        for (var k of keys) {
+            if (a[k] > b[k]) {
+                return false;
+            } else if (a[k] === b[k]) {
+                count++;
+            }
+        }
+        if (count === keys.length) {
+            return false;
+        } else {
+            return true;
+        }       
+    }
+ 
+</script>
+
+
+
+
